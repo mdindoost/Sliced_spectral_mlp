@@ -3,6 +3,9 @@ Automatic loss cutoff selection for SlicedSpectralMLP on Cora.
 Three strategies: eigenvalue gap (A), warmup peak (B), eigenvalue threshold (C).
 """
 from __future__ import annotations
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import os
 import numpy as np
 import torch
@@ -10,9 +13,9 @@ import torch.nn.functional as F
 import matplotlib; matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from data import load_dataset
-from model import SlicedSpectralMLP
-from baselines import StandardMLP, train_baseline
+from src.data.loaders import load_dataset
+from src.models.sliced_mlp import SlicedSpectralMLP
+from src.models.baselines import StandardMLP, train_baseline
 
 OUT = "outputs/cora_autocutoff"
 os.makedirs(OUT, exist_ok=True)

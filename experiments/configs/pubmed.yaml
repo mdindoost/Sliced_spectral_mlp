@@ -1,0 +1,14 @@
+# PubMed dataset configuration.
+# Homophilous citation network. N≈19717, 3 classes, single fixed split.
+
+dataset: pubmed
+n_classes: 3
+k: 64
+n_layers: 2
+lr: 0.01
+weight_decay: 0.0005
+epochs: 200
+loss_strategy: uniform
+loss_cutoff: null
+seed: 42
+n_splits: 1

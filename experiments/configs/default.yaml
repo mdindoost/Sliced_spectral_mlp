@@ -1,0 +1,13 @@
+# Default hyperparameters shared by all datasets.
+# Dataset-specific configs should inherit these and override as needed.
+
+k: 64
+n_layers: 2
+lr: 0.01
+weight_decay: 0.0005
+epochs: 200
+n_classes: null       # set per dataset (null = auto-detect from data)
+loss_strategy: uniform  # uniform | coarse | eigenvalue
+loss_cutoff: null       # null = all slices active
+seed: 42
+n_splits: 1             # number of train/val/test splits to average over

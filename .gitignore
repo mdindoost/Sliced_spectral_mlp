@@ -1,6 +1,7 @@
 # Python
 __pycache__/
 *.py[cod]
+*.pyc
 *.pyo
 *.pyd
 *.egg-info/
@@ -13,15 +14,19 @@ venv/
 .venv/
 env/
 
-# Data (large raw files)
+# Data (large raw files — downloaded at runtime)
 data/
 
-# Outputs (generated figures and logs — track selectively)
+# Outputs (generated at runtime — gitignore except .gitkeep)
 outputs/
+!outputs/.gitkeep
+
+# Checkpoints and serialized models
+*.pt
+*.pkl
 
 # Jupyter
 .ipynb_checkpoints/
-*.ipynb
 
 # OS
 .DS_Store

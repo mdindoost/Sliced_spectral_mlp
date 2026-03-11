@@ -3,13 +3,16 @@ Cora spectral truncation experiment.
 Tests whether zeroing out loss for slices past a cutoff fixes the sharing tax.
 """
 from __future__ import annotations
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import os, numpy as np, torch, torch.nn.functional as F
 import matplotlib; matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from data import load_dataset
-from model import SlicedSpectralMLP
-from baselines import StandardMLP, train_baseline
+from src.data.loaders import load_dataset
+from src.models.sliced_mlp import SlicedSpectralMLP
+from src.models.baselines import StandardMLP, train_baseline
 
 OUT = "outputs/cora_truncation"
 os.makedirs(OUT, exist_ok=True)

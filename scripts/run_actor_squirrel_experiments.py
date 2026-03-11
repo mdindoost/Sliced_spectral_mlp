@@ -6,6 +6,9 @@ Outputs: outputs/actor/  and  outputs/squirrel/
 """
 
 from __future__ import annotations
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 
 import os, sys, time
 import numpy as np
@@ -15,9 +18,9 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from data import load_dataset
-from model import SlicedSpectralMLP
-from baselines import StandardMLP, train_baseline
+from src.data.loaders import load_dataset
+from src.models.sliced_mlp import SlicedSpectralMLP
+from src.models.baselines import StandardMLP, train_baseline
 
 WALL_START = time.time()
 WALL_LIMIT  = 10 * 60   # 10 minutes hard stop

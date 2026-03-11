@@ -3,6 +3,45 @@
 A PyTorch implementation of the SlicedSpectralMLP architecture for node
 classification on graphs.
 
+## Installation
+
+```bash
+git clone https://github.com/mdindoost/Sliced_spectral_mlp
+cd Sliced_spectral_mlp
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+pip install -e .
+```
+
+## Quickstart
+
+```bash
+# Run shuffle diagnostic (fastest check, ~2 min)
+python experiments/run_shuffle.py --dataset cora
+
+# Run full experiment
+python experiments/run_experiment.py --config experiments/configs/cora.yaml
+
+# Run automatic cutoff selection
+python experiments/run_autocutoff.py --dataset cora --strategy c
+
+# Evaluate all strategies + baselines
+python experiments/run_baselines.py --dataset cora
+```
+
+## Results summary
+
+| Dataset  |  N    | MLP-half | MLP-full | Sliced-best | Strategy-C | Shuffle drop |
+|----------|-------|----------|----------|-------------|------------|--------------|
+| Cora     | 2485  |  0.7082  |  0.6448  |   0.7399    |   0.7410   |   −17.9 pp   |
+| Cornell  |  183  |  0.4054  |  0.4270  |   0.4189    |     n/a    |    −8.1 pp   |
+| Actor    | 7600  |  0.2525  |  0.2524  |   0.2511    |     n/a    |    −0.1 pp   |
+
+**Key finding:** Shuffle coarse-drop predicts whether SlicedMLP beats plain MLP.
+Large negative drop (Cora −17.9 pp) → spectral ordering is informative → Sliced wins.
+Near-zero drop (Actor −0.1 pp) → ordering is noise → Sliced provides no benefit.
+
 ## Architecture
 
 Given the **k** smallest eigenvectors of the symmetric normalised Laplacian
@@ -33,84 +72,45 @@ strategies are provided:
 ## Project structure
 
 ```
-Sliced_spectral_mlp/
-├── model.py        — SlicedSpectralMLP + compute_loss
-├── data.py         — dataset loading + Laplacian eigenvector computation
-├── baselines.py    — StandardMLP trained on full / half eigenvectors
-├── train.py        — training script
-├── eval.py         — evaluation + plots
+sliced_spectral_mlp/
+├── src/                        — importable package (pip install -e .)
+│   ├── models/                 — SlicedSpectralMLP, StandardMLP
+│   ├── data/                   — dataset loaders, eigenvector utilities
+│   ├── training/               — trainer, loss functions
+│   ├── evaluation/             — metrics, shuffle diagnostic
+│   ├── cutoff/                 — strategies A, B, C for auto cutoff
+│   └── utils/                  — visualization, I/O
+├── experiments/
+│   ├── configs/                — YAML configs per dataset
+│   ├── run_experiment.py       — main entry point
+│   ├── run_shuffle.py          — shuffle diagnostic
+│   ├── run_autocutoff.py       — automatic cutoff selection
+│   └── run_baselines.py        — evaluate all strategies + baselines
+├── scripts/                    — one-off experiment scripts (legacy)
+├── tests/                      — unit tests (pytest)
+├── outputs/                    — generated at runtime (gitignored)
+├── setup.py
 ├── requirements.txt
 └── README.md
 ```
 
-Output directories (created automatically):
-
-```
-outputs/
-├── checkpoints/best_model.pt
-├── grad_heatmaps/epoch_XXXX.png   ← |W[0].grad| heatmap every 10 epochs
-└── eval/
-    ├── spectral_resolution_curve.png
-    └── training_curves_coarse_vs_full.png
-```
-
-## Setup
+## Running tests
 
 ```bash
-# Using the existing Spectral-Basis venv (already has all dependencies):
-/home/md724/Spectral-Basis/venv/bin/python train.py
-
-# Or install dependencies into a fresh environment:
-pip install -r requirements.txt
-python train.py
+python -m pytest tests/ -v
 ```
 
-## Usage
+## Legacy scripts
 
-### Train on Cora (default)
+Dataset-specific experiment scripts are preserved in `scripts/` for
+exact reproducibility of published results:
 
 ```bash
-python train.py
+python scripts/run_cora_autocutoff.py      # Cora truncation/autocutoff
+python scripts/run_cornell_experiments.py  # Cornell 10-split experiments
+python scripts/run_pubmed.py               # PubMed with shuffle gate
+python scripts/run_actor_squirrel_experiments.py  # Actor + Squirrel
 ```
-
-Prints per-slice validation accuracy every epoch; saves gradient heatmaps
-to `outputs/grad_heatmaps/` every 10 epochs; saves best checkpoint to
-`outputs/checkpoints/best_model.pt`.
-
-### Train on Cornell (heterophilous)
-
-```bash
-python train.py --dataset cornell
-```
-
-### Use a different loss weighting strategy
-
-```bash
-python train.py --loss_weights coarse
-python train.py --loss_weights eigenvalue
-```
-
-### Full option list
-
-```
---dataset      {cora, citeseer, cornell}   (default: cora)
---k            int   number of eigenvectors (default: 64)
---n_layers     int   number of shared hidden layers (default: 2)
---lr           float Adam learning rate (default: 0.01)
---wd           float weight decay (default: 5e-4)
---epochs       int   training epochs (default: 200)
---loss_weights {uniform, coarse, eigenvalue} (default: uniform)
-```
-
-### Evaluate and compare against baselines
-
-```bash
-python eval.py
-```
-
-Trains SlicedSpectralMLP with all three weight strategies and both
-StandardMLP baselines from scratch, then prints a comparison table and
-saves two plots to `outputs/eval/`.
 
 ## Gradient heatmap interpretation
 

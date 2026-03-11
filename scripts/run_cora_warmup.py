@@ -4,6 +4,9 @@ Single 50-epoch warmup records all epochs; cutoffs extracted at W=10,20,30,50.
 Three fresh 200-epoch training runs (W=20,30,50); W=10 result reused from prior run.
 """
 from __future__ import annotations
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import os
 import numpy as np
 import torch
@@ -12,9 +15,9 @@ import matplotlib; matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 
-from data import load_dataset
-from model import SlicedSpectralMLP
-from baselines import StandardMLP, train_baseline
+from src.data.loaders import load_dataset
+from src.models.sliced_mlp import SlicedSpectralMLP
+from src.models.baselines import StandardMLP, train_baseline
 
 OUT = "outputs/cora_warmup"
 os.makedirs(OUT, exist_ok=True)

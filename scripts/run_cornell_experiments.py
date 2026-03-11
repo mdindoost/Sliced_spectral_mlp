@@ -6,6 +6,9 @@ under outputs/cornell/.
 """
 
 from __future__ import annotations
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 
 import os
 import sys
@@ -16,9 +19,9 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-from data import load_dataset
-from model import SlicedSpectralMLP
-from baselines import StandardMLP, train_baseline
+from src.data.loaders import load_dataset
+from src.models.sliced_mlp import SlicedSpectralMLP
+from src.models.baselines import StandardMLP, train_baseline
 
 OUT = "outputs/cornell"
 os.makedirs(f"{OUT}/grad_heatmaps", exist_ok=True)
