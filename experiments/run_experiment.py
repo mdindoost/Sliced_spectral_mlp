@@ -5,6 +5,7 @@ Usage
 -----
   python experiments/run_experiment.py --config experiments/configs/cora.yaml
   python experiments/run_experiment.py --config experiments/configs/cora.yaml --epochs 5
+  python experiments/run_experiment.py --config experiments/configs/cora.yaml --dry-run
 
 The script loads dataset-specific config from a YAML file, trains
 SlicedSpectralMLP with all three weight strategies plus StandardMLP
@@ -12,6 +13,9 @@ baselines, and saves results to outputs/<dataset>/.
 
 Config format: see experiments/configs/default.yaml for all fields.
 Command-line flags override the YAML config values.
+
+--dry-run prints the fully resolved config (defaults merged, CLI overrides
+applied) and exits without training. Use this to verify before every full run.
 """
 
 from __future__ import annotations
@@ -36,17 +40,68 @@ from src.data.loaders import load_dataset
 from src.models.sliced_mlp import SlicedSpectralMLP
 from src.models.baselines import StandardMLP, train_baseline
 from src.evaluation.metrics import accuracy, per_slice_accuracy
+from src.utils.io import validate_config
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
+# Canonical defaults — single source of truth for all keys.
+_DEFAULTS = {
+    "k": 64,
+    "n_layers": 2,
+    "lr": 0.01,
+    "weight_decay": 5e-4,
+    "epochs": 200,
+    "n_classes": None,
+    "loss_strategy": "uniform",
+    "loss_cutoff": None,
+    "seed": 42,
+    "n_splits": 1,
+}
+
+
 def _load_config(path: str) -> dict:
     """Load YAML config, falling back to empty dict if file missing."""
     with open(path) as f:
         cfg = yaml.safe_load(f) or {}
     return cfg
+
+
+def _resolve_config(yaml_path: str, cli_overrides: dict) -> dict:
+    """
+    Build the fully resolved config:
+      1. Start with _DEFAULTS.
+      2. Overlay with values from the YAML file.
+      3. Overlay with any non-None CLI overrides.
+    """
+    cfg = dict(_DEFAULTS)
+    cfg.update(_load_config(yaml_path))
+    for key, val in cli_overrides.items():
+        if val is not None:
+            cfg[key] = val
+    return cfg
+
+
+def _print_dry_run(cfg: dict) -> None:
+    """Print the resolved config in a readable format and exit."""
+    dataset = cfg.get("dataset", "<not set>")
+    print(f"\nResolved config for {dataset}:")
+    keys_ordered = [
+        "dataset", "n_classes", "k", "n_layers", "lr", "weight_decay",
+        "epochs", "seed", "loss_strategy", "loss_cutoff", "n_splits",
+    ]
+    # Print known keys in order, then any extras
+    printed = set()
+    for key in keys_ordered:
+        if key in cfg:
+            print(f"  {key:<15} {cfg[key]}")
+            printed.add(key)
+    for key, val in cfg.items():
+        if key not in printed:
+            print(f"  {key:<15} {val}")
+    print()
 
 
 def _train_sliced(
@@ -96,13 +151,15 @@ def _train_sliced(
 # ---------------------------------------------------------------------------
 
 def run(cfg: dict) -> None:
+    validate_config(cfg, check_data=True)
+
     dataset  = cfg["dataset"]
-    k        = cfg.get("k", 64)
-    n_layers = cfg.get("n_layers", 2)
-    lr       = cfg.get("lr", 0.01)
-    wd       = cfg.get("weight_decay", 5e-4)
-    epochs   = cfg.get("epochs", 200)
-    seed     = cfg.get("seed", 42)
+    k        = cfg["k"]
+    n_layers = cfg["n_layers"]
+    lr       = cfg["lr"]
+    wd       = cfg["weight_decay"]
+    epochs   = cfg["epochs"]
+    seed     = cfg["seed"]
     n_splits = cfg.get("n_splits", 1)
     strategy = cfg.get("loss_strategy", "uniform")
     cutoff   = cfg.get("loss_cutoff", None)
@@ -211,6 +268,8 @@ def _parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Run SlicedSpectralMLP experiment")
     p.add_argument("--config", type=str, required=True,
                    help="Path to YAML config file (e.g. experiments/configs/cora.yaml)")
+    p.add_argument("--dry-run", action="store_true",
+                   help="Print the fully resolved config and exit without training")
     p.add_argument("--dataset",  type=str, default=None,
                    help="Override dataset name from config")
     p.add_argument("--epochs",   type=int, default=None,
@@ -230,21 +289,20 @@ def _parse_args() -> argparse.Namespace:
 if __name__ == "__main__":
     args = _parse_args()
 
-    # Load YAML config
-    cfg = _load_config(args.config)
+    cli_overrides = {
+        "dataset":       args.dataset,
+        "epochs":        args.epochs,
+        "k":             args.k,
+        "lr":            args.lr,
+        "seed":          args.seed,
+        "loss_strategy": args.loss_strategy,
+    }
+    cfg = _resolve_config(args.config, cli_overrides)
 
-    # Apply CLI overrides
-    if args.dataset is not None:
-        cfg["dataset"] = args.dataset
-    if args.epochs is not None:
-        cfg["epochs"] = args.epochs
-    if args.k is not None:
-        cfg["k"] = args.k
-    if args.lr is not None:
-        cfg["lr"] = args.lr
-    if args.seed is not None:
-        cfg["seed"] = args.seed
-    if args.loss_strategy is not None:
-        cfg["loss_strategy"] = args.loss_strategy
+    if args.dry_run:
+        _print_dry_run(cfg)
+        validate_config(cfg, check_data=False)
+        print("Config OK (structural checks passed; use without --dry-run to also check dataset).")
+        sys.exit(0)
 
     run(cfg)

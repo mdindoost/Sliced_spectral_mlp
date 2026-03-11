@@ -94,11 +94,32 @@ Reference values from completed experiments:
 Pattern: larger |drop| predicts Sliced > MLP-full. Actor/Squirrel confirmed
 this in the negative direction.
 
+## Config Safety
+
+**Before every full run, use --dry-run to verify the resolved config:**
+```
+python experiments/run_experiment.py --config experiments/configs/cora.yaml --dry-run
+```
+This prints every key with its resolved value (defaults merged, CLI overrides applied)
+and runs structural checks (types, required keys). It does NOT load the dataset or train.
+
+**validate_config() is called automatically at the start of every experiment.**
+It checks:
+1. All required keys present: dataset, k, n_layers, lr, weight_decay, epochs, seed
+2. lr and weight_decay are floats (YAML silently reads `0.01` as str if quoted)
+3. k < N_LCC — eigsh will crash if k >= number of nodes in the LCC
+4. n_classes (if set) matches the actual dataset label count
+
+validate_config() lives in src/utils/io.py. Call it at the top of run() in any new
+experiment script, before loading the full eigenvector matrix.
+
 ## Coding Conventions
 
 - All experiment entry points in experiments/ import only from src/
 - Configs are yaml files in experiments/configs/ — hyperparameters never
   hardcoded in scripts
+- Always call validate_config(cfg, check_data=True) before training
+- Use --dry-run to verify config before a full run
 - Outputs always go to outputs/<dataset>/ — never to src/ or experiments/
 - Use the existing load_dataset() and compute_eigenvectors() functions —
   do not recompute eigenvectors inline in scripts
