@@ -53,6 +53,37 @@ src/data/eigenvectors.py). Do not recompute eigenvectors inline in scripts.
 5. **Reproducibility.** All experiments used seed=42, k=64, n_layers=2,
    lr=0.01, weight_decay=5e-4. Do not change defaults in experiments/configs/default.yaml.
 
+## Known Bugs and Lessons Learned
+
+### Bug 3 — Model selection with truncated loss (FIXED, 2026-03)
+
+**⚠ CAUTION: If you ever touch checkpoint selection logic in trainer.py, re-read this.**
+
+When `loss_cutoff=j*` is set, slices `j*+1 … n_slices-1` receive **zero gradient**
+throughout training. The full slice (j=32, `all_logits[-1]`) is therefore undertrained
+and its val accuracy is essentially random noise.
+
+**Wrong (original code):**
+```python
+val_acc = accuracy(all_logits[-1], labels, val_mask)  # always uses full slice
+```
+
+**Correct (fixed code in src/training/trainer.py):**
+```python
+track_j = loss_cutoff if loss_cutoff is not None else len(all_logits) - 1
+track_val = accuracy(all_logits[track_j], labels, val_mask)
+```
+
+**Why this mattered:** The bug caused checkpoint selection to track a noisy random
+signal when any cutoff was set, corrupting ALL cutoff sensitivity results and
+producing sign-flipped shuffle drops on CiteSeer (+14.2pp) and PubMed (+30.7pp).
+
+**Protection:** Regression test at `tests/test_bug3_model_selection.py`. Run it
+before and after any refactor of the training loop. The test suite now has 30 tests
+(was 28). Do not remove this test.
+
+---
+
 ## Key Design Decisions (Do Not Revisit Without Good Reason)
 
 - **Loss cutoff is the main hyperparameter.** Setting loss_cutoff=None trains
@@ -134,6 +165,51 @@ experiment script, before loading the full eigenvector matrix.
 - Do not change the LCC extraction logic — Cornell especially is sensitive
   to which nodes are included (N=183 LCC vs larger raw graph).
 - Do not commit outputs/, checkpoints, or the venv/.
+
+## Multi-Seed Experiment Scripts
+
+Two scripts run the primary multi-seed evaluation. Both use **fixed splits**
+and seeds [0,1,2,3,4] for weight init only.
+
+### scripts/run_fixed_split_multiseed.py  ← PRIMARY
+
+The canonical evaluation script for the paper.
+
+Split protocol:
+  cora, citeseer, pubmed   — PyG Planetoid fixed splits (LCC-filtered sizes:
+                             Cora 122/459/915, CiteSeer 80/328/663, PubMed 60/500/1000)
+  amazon_photo, actor,     — fixed stratified 60/20/20 generated ONCE with
+  cornell                    seed=100, saved to outputs/fixed_splits/,
+                             reused for all 5 seeds
+
+Usage:
+  python scripts/run_fixed_split_multiseed.py
+  python scripts/run_fixed_split_multiseed.py --dataset cora citeseer
+  python scripts/run_fixed_split_multiseed.py --skip-pytest   # skip Bug 3 test
+
+Outputs: outputs/fixed_split_multiseed/{per_seed,aggregated,tables,figures}/
+
+### scripts/run_multiseed.py  ← ALIAS
+
+Thin wrapper around run_fixed_split_multiseed.py.
+Identical experiment, outputs to outputs/multiseed/ instead.
+Shares the same saved split masks in outputs/fixed_splits/.
+
+Usage:
+  python scripts/run_multiseed.py   (same flags as run_fixed_split_multiseed.py)
+
+### What both scripts produce
+
+Per run: 3 tables (main_results, jcut_sensitivity, jcut_stability),
+         6 figures (shuffle_drop, per_slice_curves, jcut_sensitivity,
+                    main_results_bars, scatter_drop_vs_gain,
+                    jcut_stability_heatmap),
+         per-seed CSVs, aggregated CSVs, experiment_log.md.
+
+j_cut* selected by VAL accuracy per seed — never by test.
+Bug 3 fix verified by pytest before training starts (unless --skip-pytest).
+
+---
 
 ## Running Tests
 

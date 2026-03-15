@@ -86,6 +86,18 @@ def train_sliced(
         val_accs_coarse.append(coarse_val)
         val_accs_full.append(full_val)
 
+        # IMPORTANT — Bug 3 fix (2026-03)
+        # Model selection must use the LAST ACTIVE slice (j=loss_cutoff),
+        # NOT the full slice (j=n_slices-1).
+        #
+        # Reason: when loss_cutoff < n_slices, the full slice receives no
+        # loss gradient and its val accuracy is essentially random noise.
+        # Using it for checkpoint selection caused wrong checkpoints to be
+        # saved and corrupted all cutoff sensitivity results.
+        #
+        # The regression test in tests/test_bug3_model_selection.py
+        # verifies this behavior. Do not change this without updating
+        # that test first.
         track_j = loss_cutoff if loss_cutoff is not None else len(all_logits) - 1
         track_val = accuracy(all_logits[track_j], labels, val_mask)
 

@@ -1,0 +1,17 @@
+# Per-slice row norm, head bias removed (head_bias=False)
+dataset: pubmed
+n_classes: 3
+k: 64
+n_layers: 2
+lr: 0.01
+weight_decay: 0.0005
+epochs: 200
+seed: 42
+loss_strategy: uniform
+loss_cutoff: null
+use_sphere_norm: true
+use_row_norm_input: true
+hidden_bias: false
+head_bias: false
+output_dir: outputs/rownorm_nobias
+run_name: rownorm_nobias_head

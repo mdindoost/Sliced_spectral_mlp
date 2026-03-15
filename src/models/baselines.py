@@ -51,12 +51,42 @@ class StandardMLP(nn.Module):
         return self.head(self.backbone(x))
 
 
+class RowNormMLP(nn.Module):
+    """MLP with row-wise L2 normalisation at input and after each hidden layer.
+
+    No bias terms — sphere normalisation already removes the mean-field
+    component, so biases are redundant and can destabilise training.
+
+    Two standard variants:
+        RowNormMLP-half : input_dim = k // 2
+        RowNormMLP-full : input_dim = k
+
+    Note: RowNormMLP normalizes the full input vector, not per-slice.
+    Per-slice normalization only applies to SlicedSpectralMLP with
+    use_row_norm_input=True. These are different operations.
+    """
+
+    def __init__(self, input_dim: int, hidden_dim: int, output_dim: int) -> None:
+        super().__init__()
+        self.fc1 = nn.Linear(input_dim, hidden_dim, bias=False)
+        self.fc2 = nn.Linear(hidden_dim, hidden_dim, bias=False)
+        self.fc3 = nn.Linear(hidden_dim, output_dim, bias=False)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = F.normalize(x, p=2, dim=1)
+        x = F.relu(self.fc1(x))
+        x = F.normalize(x, p=2, dim=1)
+        x = F.relu(self.fc2(x))
+        x = F.normalize(x, p=2, dim=1)
+        return self.fc3(x)
+
+
 # ---------------------------------------------------------------------------
 # Training helper shared by baselines (and reused in eval.py)
 # ---------------------------------------------------------------------------
 
 def train_baseline(
-    model: StandardMLP,
+    model: nn.Module,
     X: torch.Tensor,
     labels: torch.Tensor,
     train_mask: torch.Tensor,

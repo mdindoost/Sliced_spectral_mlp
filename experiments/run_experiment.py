@@ -59,6 +59,10 @@ _DEFAULTS = {
     "loss_cutoff": None,
     "seed": 42,
     "n_splits": 1,
+    "use_row_norm_input": False,
+    "use_sphere_norm": True,
+    "hidden_bias": False,
+    "head_bias": True,
 }
 
 
@@ -160,11 +164,16 @@ def run(cfg: dict) -> None:
     wd       = cfg["weight_decay"]
     epochs   = cfg["epochs"]
     seed     = cfg["seed"]
-    n_splits = cfg.get("n_splits", 1)
-    strategy = cfg.get("loss_strategy", "uniform")
-    cutoff   = cfg.get("loss_cutoff", None)
+    n_splits      = cfg.get("n_splits", 1)
+    strategy      = cfg.get("loss_strategy", "uniform")
+    cutoff        = cfg.get("loss_cutoff", None)
+    use_row_norm  = cfg.get("use_row_norm_input", False)
+    use_sph_norm  = cfg.get("use_sphere_norm", True)
+    hidden_bias   = cfg.get("hidden_bias", False)
+    head_bias     = cfg.get("head_bias", True)
 
-    out_dir = os.path.join("outputs", dataset)
+    out_root = cfg.get("output_dir", "outputs")
+    out_dir  = os.path.join(out_root, dataset)
     os.makedirs(out_dir, exist_ok=True)
 
     # ----------------------------------------------------------------
@@ -182,6 +191,9 @@ def run(cfg: dict) -> None:
         f"{test_mask.sum().item()} test"
     )
 
+    if use_row_norm:
+        print("  row_norm_input=True  (per-slice normalization inside model)")
+
     # ----------------------------------------------------------------
     # SlicedSpectralMLP — configured strategy
     # ----------------------------------------------------------------
@@ -192,6 +204,10 @@ def run(cfg: dict) -> None:
         n_layers=n_layers,
         loss_weights=strategy,
         eigenvalues=eigenvalues if strategy == "eigenvalue" else None,
+        use_row_norm_input=use_row_norm,
+        use_sphere_norm=use_sph_norm,
+        hidden_bias=hidden_bias,
+        head_bias=head_bias,
     )
     n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(
@@ -254,7 +270,9 @@ def run(cfg: dict) -> None:
     table_str = "\n".join(lines)
     print(table_str)
 
-    table_path = os.path.join(out_dir, "comparison_table.txt")
+    run_name   = cfg.get("run_name", None)
+    fname      = f"{run_name}_results.txt" if run_name else "comparison_table.txt"
+    table_path = os.path.join(out_dir, fname)
     with open(table_path, "w") as f:
         f.write(table_str + "\n")
     print(f"\nSaved {table_path}")
@@ -283,6 +301,10 @@ def _parse_args() -> argparse.Namespace:
     p.add_argument("--loss_strategy", type=str, default=None,
                    choices=["uniform", "coarse", "eigenvalue"],
                    help="Override loss weighting strategy")
+    p.add_argument("--row_norm_input", action="store_true", default=None,
+                   help="Row-normalise U before feeding into model (Option B)")
+    p.add_argument("--no_sphere_norm", action="store_true", default=None,
+                   help="Disable internal sphere normalisation after each layer")
     return p.parse_args()
 
 
@@ -290,12 +312,14 @@ if __name__ == "__main__":
     args = _parse_args()
 
     cli_overrides = {
-        "dataset":       args.dataset,
-        "epochs":        args.epochs,
-        "k":             args.k,
-        "lr":            args.lr,
-        "seed":          args.seed,
-        "loss_strategy": args.loss_strategy,
+        "dataset":            args.dataset,
+        "epochs":             args.epochs,
+        "k":                  args.k,
+        "lr":                 args.lr,
+        "seed":               args.seed,
+        "loss_strategy":      args.loss_strategy,
+        "use_row_norm_input": True if args.row_norm_input else None,
+        "use_sphere_norm":    False if args.no_sphere_norm else None,
     }
     cfg = _resolve_config(args.config, cli_overrides)
 

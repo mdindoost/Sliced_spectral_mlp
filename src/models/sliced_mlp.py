@@ -33,6 +33,10 @@ class SlicedSpectralMLP(nn.Module):
         loss_weights: str = "uniform",
         eigenvalues: Optional[np.ndarray] = None,
         custom_slice_dims: Optional[List[int]] = None,
+        use_row_norm_input: bool = False,
+        use_sphere_norm: bool = True,
+        hidden_bias: bool = False,
+        head_bias: bool = True,
     ) -> None:
         """
         Args:
@@ -45,9 +49,33 @@ class SlicedSpectralMLP(nn.Module):
             custom_slice_dims: If provided, overrides the default sequential
                               slice dims [k//2, k//2+1, ..., k]. All values
                               must be in [1, k].
+            use_row_norm_input: If True, L2-normalise each slice prefix
+                              independently before the first layer.  Slice j
+                              sees F.normalize(x[:, :d_j], p=2, dim=1), so
+                              every slice has unit-norm inputs regardless of
+                              width.  This is applied INSIDE the slice loop,
+                              not once on the full x.
+            use_sphere_norm:  If True (default), apply L2 sphere normalisation
+                              after each hidden layer. Set False to isolate
+                              whether internal sphere norm is redundant given
+                              row-normalised input.
+            hidden_bias:      If True, add a shared bias vector b[l] (length k)
+                              to each hidden layer; slice j uses b[l][:d_j].
+                              Default False — the original architecture has NO
+                              hidden bias (weights are raw nn.Parameter matrices,
+                              not nn.Linear).
+            head_bias:        If True (default), output heads include a bias
+                              term. Matches the nn.Linear default and existing
+                              behaviour. Set False for a purely geometric model
+                              where every head is a bias-free linear map from
+                              the unit sphere.
         """
         super().__init__()
         self.k = k
+        self.use_row_norm_input = use_row_norm_input
+        self.use_sphere_norm = use_sphere_norm
+        self.hidden_bias = hidden_bias
+        self.head_bias = head_bias
         self.n_classes = n_classes
         self.n_layers = n_layers
         self.half = k // 2
@@ -69,9 +97,17 @@ class SlicedSpectralMLP(nn.Module):
         for param in self.W:
             nn.init.orthogonal_(param)
 
+        # Optional shared hidden bias — one length-k vector per layer.
+        # Slice j uses b[l][:d_j].  Only allocated when hidden_bias=True;
+        # initialised to zero so the model starts equivalent to no-bias.
+        if hidden_bias:
+            self.b = nn.ParameterList(
+                [nn.Parameter(torch.zeros(k)) for _ in range(n_layers)]
+            )
+
         # Separate output head per slice — NOT shared.
         self.heads = nn.ModuleList(
-            [nn.Linear(d_j, n_classes) for d_j in self.slice_dims]
+            [nn.Linear(d_j, n_classes, bias=head_bias) for d_j in self.slice_dims]
         )
 
         # Pre-compute and register loss weights as a non-trainable buffer.
@@ -129,13 +165,21 @@ class SlicedSpectralMLP(nn.Module):
 
         for j, d_j in enumerate(self.slice_dims):
             h = x[:, :d_j]  # (N, d_j) — prefix slice
+            if self.use_row_norm_input:
+                # Per-slice normalization: each prefix is independently unit-norm.
+                # Slice j=0 (d=32) and slice j=32 (d=64) produce DIFFERENT
+                # normalised vectors for the same node — that is intentional.
+                h = F.normalize(h, p=2, dim=1)
 
             for l in range(self.n_layers):
                 # Top-left (d_j × d_j) submatrix of the shared (k × k) weight.
                 W_j = self.W[l][:d_j, :d_j]  # gradient flows here
                 h = h @ W_j                   # (N, d_j)
+                if self.hidden_bias:
+                    h = h + self.b[l][:d_j]   # shared hidden bias prefix
                 h = F.relu(h)
-                h = F.normalize(h, p=2, dim=-1)  # L2 sphere normalisation
+                if self.use_sphere_norm:
+                    h = F.normalize(h, p=2, dim=-1)  # L2 sphere normalisation
 
             all_logits.append(self.heads[j](h))
 

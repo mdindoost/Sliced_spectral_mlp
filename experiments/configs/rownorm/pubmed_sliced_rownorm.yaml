@@ -1,0 +1,13 @@
+# Sliced-dense + row-norm input, sphere norm inside
+dataset: pubmed
+n_classes: 3
+k: 64
+n_layers: 2
+lr: 0.01
+weight_decay: 0.0005
+epochs: 200
+seed: 42
+loss_strategy: uniform
+loss_cutoff: null
+use_row_norm_input: true
+use_sphere_norm: true

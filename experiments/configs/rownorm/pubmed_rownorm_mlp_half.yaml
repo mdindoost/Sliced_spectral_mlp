@@ -1,0 +1,14 @@
+# RowNormMLP-half: input_dim=32, no bias, sphere norm at input+layers
+# NOTE: run via scripts/run_rownorm.py — not supported by run_experiment.py
+dataset: pubmed
+n_classes: 3
+k: 64
+n_layers: 2
+lr: 0.01
+weight_decay: 0.0005
+epochs: 200
+seed: 42
+model_type: rownorm_mlp
+input_dim: 32
+use_row_norm_input: true
+use_sphere_norm: true
